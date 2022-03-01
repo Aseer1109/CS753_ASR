@@ -108,7 +108,7 @@ if [ $stage -le 5 ]; then
       ### Triphone
     echo "Triphone training"
     steps/align_si.sh --nj $nj --cmd "$train_cmd" \
-       data/train_sp3 lang exp/mono exp/mono_ali
+       data/dev_sp3 lang exp/mono exp/mono_ali
 	  steps/train_deltas.sh --boost-silence 1.25  --cmd "$train_cmd"  \
 	     5000 5000 data/dev_sp3 lang exp/mono_ali exp/tri1
     echo "Triphone training done"
