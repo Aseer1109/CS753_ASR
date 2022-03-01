@@ -14,8 +14,8 @@
 ###############################################################
 #                   Configuring the ASR pipeline
 ###############################################################
-stage=5    # from which stage should this script start
-nj=6        # number of parallel jobs to run during training
+stage=1    # from which stage should this script start
+nj=2        # number of parallel jobs to run during training
 test_nj=2    # number of parallel jobs to run during decoding
 # the above two parameters are bounded by the number of speakers in each set
 ###############################################################
@@ -24,6 +24,7 @@ test_nj=2    # number of parallel jobs to run during decoding
 # language model.
 if [ $stage -le 1 ]; then
   echo "Preparing lexicon and language models"
+  > lang/dict/silence_phones.txt
   local/prepare_lexicon.sh
   local/prepare_lm.sh
 fi
@@ -31,6 +32,7 @@ fi
 # Feature extraction
 # Stage 2: MFCC feature extraction + mean-variance normalization
 if [ $stage -le 2 ]; then
+   
    for x in train dev test; do
       steps/make_mfcc.sh --nj 8 --cmd "$train_cmd" data/$x exp/make_mfcc/$x mfcc
       steps/compute_cmvn_stats.sh data/$x exp/make_mfcc/$x mfcc
@@ -41,14 +43,16 @@ fi
 if [ $stage -le 3 ]; then
   ### Monophone
     echo "Monophone training"
-	steps/train_mono.sh --nj "$nj" --cmd "$train_cmd" data/dev lang exp/mono
+	steps/train_mono.sh --nj "$nj" --cmd "$train_cmd" data/train lang exp/mono
     echo "Monophone training done"
     (
-    echo "Decoding the test set"
+    echo "Decoding the dev set"
     utils/mkgraph.sh lang exp/mono exp/mono/graph
   
     # This decode command will need to be modified when you 
     # want to use tied-state triphone models 
+    steps/decode.sh --nj $test_nj --cmd "$decode_cmd" \
+      exp/mono/graph data/dev exp/mono/decode_dev
     steps/decode.sh --nj $test_nj --cmd "$decode_cmd" \
       exp/mono/graph data/test exp/mono/decode_test
     echo "Monophone decoding done."
@@ -62,7 +66,7 @@ if [ $stage -le 4 ]; then
     steps/align_si.sh --nj $nj --cmd "$train_cmd" \
        data/dev lang exp/mono exp/mono_ali
 	  steps/train_deltas.sh --boost-silence 1.25  --cmd "$train_cmd"  \
-	     5000 5000 data/dev lang exp/mono_ali exp/tri1
+	     5000 5000 data/train lang exp/mono_ali exp/tri1
     echo "Triphone training done"
 	  #Add triphone decoding steps here #
     (
@@ -71,6 +75,8 @@ if [ $stage -le 4 ]; then
   
     # This decode command will need to be modified when you 
     # want to use tied-state triphone models 
+    steps/decode.sh --nj $test_nj --cmd "$decode_cmd" \
+      exp/tri1/graph data/dev exp/tri1/decode_dev
     steps/decode.sh --nj $test_nj --cmd "$decode_cmd" \
       exp/tri1/graph data/test exp/tri1/decode_test
     echo "Triphone decoding done."
@@ -88,34 +94,72 @@ if [ $stage -le 5 ]; then
   
     utils/data/perturb_data_dir_speed_3way.sh data/train data/train_sp3
 
-    for x in train_sp3 test; do
+    for x in train_sp3 dev test; do
        steps/make_mfcc.sh --nj 8 --cmd "$train_cmd" data/$x exp/make_mfcc/$x mfcc
        steps/compute_cmvn_stats.sh data/$x exp/make_mfcc/$x mfcc
     done
 
   ### Monophone
     echo "Monophone training"
-	steps/train_mono.sh --nj "$nj" --cmd "$train_cmd" data/train_sp3 lang exp/mono
+	steps/train_mono.sh --nj "$nj" --cmd "$train_cmd" data/train_sp3 lang exp/mono_dat_aug
     echo "Monophone training done"
         
       ### Triphone
     echo "Triphone training"
     steps/align_si.sh --nj $nj --cmd "$train_cmd" \
-       data/train_sp3 lang exp/mono exp/mono_ali
+       data/train_sp3 lang exp/mono_dat_aug exp/mono_ali_dat_aug
     steps/train_deltas.sh --boost-silence 1.25  --cmd "$train_cmd"  \
-	     5000 5000 data/train_sp3 lang exp/mono_ali exp/tri1
+	     5000 5000 data/train_sp3 lang exp/mono_ali_dat_aug exp/tri1_dat_aug
 	     
     echo "Triphone training done"
     (
     echo "Decoding the test set"
-    utils/mkgraph.sh lang exp/tri1 exp/tri1/graph
+    utils/mkgraph.sh lang exp/tri1_dat_aug exp/tri1_dat_aug/graph
   
     steps/decode.sh --nj $test_nj --cmd "$decode_cmd" \
-      exp/tri1/graph data/test exp/tri1/decode_test
+      exp/tri1_dat_aug/graph data/dev exp/tri1_dat_aug/decode_dev
+    steps/decode.sh --nj $test_nj --cmd "$decode_cmd" \
+      exp/tri1_dat_aug/graph data/test exp/tri1_dat_aug/decode_test
     echo "Triphone decoding done."
     ) &
 fi
 
+# # Stage 6
+if [ $stage -le 6 ]; then
+    echo "True Test"
+    > lang/dict/silence_phones.txt
+    local/prepare_lexicon.sh
+    local/prepare_lm.sh
+  
+    utils/data/perturb_data_dir_speed_3way.sh data/train data/train_sp3
+
+    for x in train_sp3 truetest; do
+       steps/make_mfcc.sh --nj 8 --cmd "$train_cmd" data/$x exp/make_mfcc/$x mfcc
+       steps/compute_cmvn_stats.sh data/$x exp/make_mfcc/$x mfcc
+    done
+
+  ### Monophone
+    echo "Monophone training"
+	steps/train_mono.sh --nj "$nj" --cmd "$train_cmd" data/train_sp3 lang exp/mono_truetest
+    echo "Monophone training done"
+        
+      ### Triphone
+    echo "Triphone training"
+    steps/align_si.sh --nj $nj --cmd "$train_cmd" \
+       data/train_sp3 lang exp/mono_truetest exp/mono_ali_truetest
+    steps/train_deltas.sh --boost-silence 1.25  --cmd "$train_cmd"  \
+	     5000 5000 data/train_sp3 lang exp/mono_ali_truetest exp/tri1_truetest
+	     
+    echo "Triphone training done"
+    (
+    echo "Decoding the test set"
+    utils/mkgraph.sh lang exp/tri1_truetest exp/tri1_truetest/graph
+  
+    steps/decode.sh --nj $test_nj --cmd "$decode_cmd" \
+      exp/tri1_truetest/graph data/truetest exp/tri1_truetest/decode_truetest
+    echo "Triphone decoding done."
+    ) &
+fi
 
 
 
