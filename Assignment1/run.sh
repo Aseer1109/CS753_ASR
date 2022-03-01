@@ -82,43 +82,34 @@ fi
 # # Stage 5
 if [ $stage -le 5 ]; then
     echo "Data Augmentation"
-    utils/data/perturb_data_dir_speed_3way.sh data/dev data/dev_sp3
+    > lang/dict/silence_phones.txt
+    local/prepare_lexicon.sh
+    local/prepare_lm.sh
+  
+    utils/data/perturb_data_dir_speed_3way.sh data/train data/train_sp3
 
-    for x in dev_sp3 test; do
+    for x in train_sp3 test; do
        steps/make_mfcc.sh --nj 8 --cmd "$train_cmd" data/$x exp/make_mfcc/$x mfcc
        steps/compute_cmvn_stats.sh data/$x exp/make_mfcc/$x mfcc
     done
 
   ### Monophone
     echo "Monophone training"
-	  steps/train_mono.sh --nj "$nj" --cmd "$train_cmd" data/dev_sp3 lang exp/mono
+	steps/train_mono.sh --nj "$nj" --cmd "$train_cmd" data/train_sp3 lang exp/mono
     echo "Monophone training done"
-    (
-    echo "Decoding the test set"
-    utils/mkgraph.sh lang exp/mono exp/mono/graph
-  
-    # This decode command will need to be modified when you 
-    # want to use tied-state triphone models 
-    steps/decode.sh --nj $test_nj --cmd "$decode_cmd" \
-      exp/mono/graph data/test exp/mono/decode_test
-    echo "Monophone decoding done."
-    ) &
-    
-    
+        
       ### Triphone
     echo "Triphone training"
     steps/align_si.sh --nj $nj --cmd "$train_cmd" \
-       data/dev_sp3 lang exp/mono exp/mono_ali
-	  steps/train_deltas.sh --boost-silence 1.25  --cmd "$train_cmd"  \
-	     5000 5000 data/dev_sp3 lang exp/mono_ali exp/tri1
+       data/train_sp3 lang exp/mono exp/mono_ali
+    steps/train_deltas.sh --boost-silence 1.25  --cmd "$train_cmd"  \
+	     5000 5000 data/train_sp3 lang exp/mono_ali exp/tri1
+	     
     echo "Triphone training done"
-	  #Add triphone decoding steps here #
     (
     echo "Decoding the test set"
     utils/mkgraph.sh lang exp/tri1 exp/tri1/graph
   
-    # This decode command will need to be modified when you 
-    # want to use tied-state triphone models 
     steps/decode.sh --nj $test_nj --cmd "$decode_cmd" \
       exp/tri1/graph data/test exp/tri1/decode_test
     echo "Triphone decoding done."
