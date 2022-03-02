@@ -213,3 +213,7 @@ $RECYCLE.BIN/
 **/training-monolingual
 **/training-preprocessed
 *.fst
+
+# Submission Directory
+**Submission
+submission.tgz
