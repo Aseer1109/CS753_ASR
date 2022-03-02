@@ -14,12 +14,12 @@ cmd=run.pl
 scale_opts="--transition-scale=1.0 --acoustic-scale=0.1 --self-loop-scale=0.1"
 num_iters=40    # Number of iterations of training
 max_iter_inc=30 # Last iter to increase #Gauss on.
-initial_beam=6 # beam used in the first iteration (set smaller to speed up initialization)
+initial_beam=12 # beam used in the first iteration (set smaller to speed up initialization)
 regular_beam=15 # beam used after the first iteration
 retry_beam=40
-totgauss=1000 # Target #Gaussians.
+totgauss=2000 # Target #Gaussians.
 careful=false
-boost_silence=1.25 # Factor by which to boost silence likelihoods in alignment
+boost_silence=1 # Factor by which to boost silence likelihoods in alignment
 realign_iters="1 2 3 4 5 6 7 8 9 10 12 14 16 18 20 23 26 29 32 35 38";
 config= # name of config file.
 stage=-4

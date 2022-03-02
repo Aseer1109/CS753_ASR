@@ -1,4 +1,4 @@
-dir="exp/tri1/"
+dir="exp/tri1_dat_aug/"
 
 for i in  $dir/ali.*.gz;
 do ../../src/bin/ali-to-phones --ctm-output $dir/final.mdl ark:"gunzip -c $i|" -> ${i%.gz}.ctm;
